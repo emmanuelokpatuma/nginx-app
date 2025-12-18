@@ -1,21 +1,23 @@
-@Library('mySharedLibrary') _
+@Library('mySharedLibrary') _  // Ensure your shared library is available
 
-def buildTag = ''
+def buildTag = ''  // Variable to store build tag
 
 pipeline {
     agent { label 'build-agent' }
 
     parameters {
-        string(name: 'BRANCH', defaultValue: 'master')
-        string(name: 'APP_VERSION', defaultValue: '1.0.0')
-        choice(name: 'ENV', choices: ['dev', 'staging', 'prod'])
-        booleanParam(name: 'DEPLOY', defaultValue: true)
+        string(name: 'BRANCH', defaultValue: 'master', description: 'Git branch to build')
+        string(name: 'APP_VERSION', defaultValue: '1.0.0', description: 'App version/tag')
+        choice(name: 'ENV', choices: ['dev', 'staging', 'prod'], description: 'Target environment')
+        booleanParam(name: 'DEPLOY', defaultValue: true, description: 'Deploy after build?')
     }
 
     environment {
-        HELM_RELEASE = 'nginx-app'
-        K8S_NAMESPACE = 'default'
-        DOCKER_REGISTRY = 'omagu'
+        HELM_RELEASE = 'nginx-app'  // Helm release name
+        K8S_NAMESPACE = 'default'   // Kubernetes namespace
+        DOCKER_REGISTRY = 'omagu'  // Docker registry name
+        DOCKER_CREDENTIALS = 'docker-cred-id'  // Jenkins credentials ID for Docker
+        KUBE_CREDENTIALS = 'aks-kubeconfig'   // Jenkins credentials ID for Kubernetes config
     }
 
     stages {
@@ -30,14 +32,17 @@ pipeline {
 
         stage('Checkout Code') {
             steps {
-                git url: 'https://github.com/gititc778/sampleApp.git', branch: "${params.BRANCH}"
+                git url: 'https://github.com/emmanuelokpatuma/nginx-app.git', branch: "${params.BRANCH}"
             }
         }
 
         stage('Build Docker Image') {
             steps {
                 script {
-                    buildDocker(buildTag)
+                    // Build Docker image
+                    docker.withRegistry('https://index.docker.io/v1/', env.DOCKER_CREDENTIALS) {
+                        sh "docker build -t ${DOCKER_REGISTRY}/nginx-app:${buildTag} ."
+                    }
                 }
             }
         }
@@ -45,20 +50,32 @@ pipeline {
         stage('Push Docker Image') {
             steps {
                 script {
-                    pushDocker(buildTag)
+                    // Push Docker image to the Docker registry
+                    docker.withRegistry('https://index.docker.io/v1/', env.DOCKER_CREDENTIALS) {
+                        sh "docker push ${DOCKER_REGISTRY}/nginx-app:${buildTag}"
+                    }
                 }
             }
         }
 
         stage('Deploy to AKS') {
-            when {
-                expression { params.DEPLOY }
-            }
+            when { expression { params.DEPLOY } }
             steps {
                 script {
-                    deployK8s(buildTag, params.ENV)
+                    // Deploy to AKS using Helm
+                    withCredentials([file(credentialsId: env.KUBE_CREDENTIALS, variable: 'KUBECONFIG')]) {
+                        sh """
+                        helm upgrade --install ${HELM_RELEASE} ./helm-chart --namespace ${K8S_NAMESPACE} --set image.tag=${buildTag} --set environment=${params.ENV}
+                        """
+                    }
                 }
             }
+        }
+    }
+
+    post {
+        always {
+            echo "Pipeline finished. Build tag: ${buildTag}"
         }
     }
 }

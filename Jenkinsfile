@@ -1,6 +1,6 @@
-@Library('mySharedLibrary') _
+@Library('mySharedLibrary') _  // Ensure your shared library is available
 
-def buildTag = ''
+def buildTag = ''  // Variable to store build tag
 
 pipeline {
     agent { label 'build-agent' }
@@ -13,18 +13,15 @@ pipeline {
     }
 
     environment {
-        HELM_RELEASE = 'nginx-app'
-        K8S_NAMESPACE = 'default'
-        DOCKER_REGISTRY = 'omagu' // replace with your Docker registry
+        HELM_RELEASE = 'nginx-app'  // Name of your Helm release
+        K8S_NAMESPACE = 'default'  // Kubernetes namespace
+        DOCKER_REGISTRY = 'omagu'  // Docker registry name
+        DOCKER_CREDENTIALS = 'docker-cred-id'  // Jenkins credentials ID for Docker
+        KUBE_CREDENTIALS = 'aks-kubeconfig'  // Jenkins credentials ID for Kubernetes config
+        SONARQUBE_SERVER = 'MySonarQube'  // Name of your SonarQube server configured in Jenkins
     }
 
     stages {
-        stage('Checkout Code') {
-            steps {
-                git url: 'https://github.com/gititc778/sampleApp.git', branch: "${params.BRANCH}"
-            }
-        }
-
         stage('Generate Build Tag') {
             steps {
                 script {
@@ -34,10 +31,42 @@ pipeline {
             }
         }
 
+        stage('Checkout Code') {
+            steps {
+                git url: 'https://github.com/emmanuelokpatuma/nginx-app.git', branch: "${params.BRANCH}"
+            }
+        }
+
+        stage('SonarQube Analysis') {
+            steps {
+                script {
+                    // Run SonarQube analysis
+                    withSonarQubeEnv(SONARQUBE_SERVER) {
+                        sh 'mvn clean verify sonar:sonar'  // Adjust for your build tool, like Gradle or npm
+                    }
+                }
+            }
+        }
+
+        stage('SonarQube Quality Gate') {
+            steps {
+                script {
+                    // Wait for SonarQube quality gate status
+                    def qualityGate = waitForQualityGate()  // Checks SonarQube quality gate status
+                    if (qualityGate.status != 'OK') {
+                        error "Quality gate failed: ${qualityGate.status}"  // Fail if quality gate fails
+                    }
+                }
+            }
+        }
+
         stage('Build Docker Image') {
             steps {
                 script {
-                    buildDocker("${buildTag}") // calls your shared library function
+                    // Build Docker image and tag it
+                    docker.withRegistry('https://index.docker.io/v1/', env.DOCKER_CREDENTIALS) {
+                        sh "docker build -t ${DOCKER_REGISTRY}/nginx-app:${buildTag} ."
+                    }
                 }
             }
         }
@@ -45,24 +74,24 @@ pipeline {
         stage('Push Docker Image') {
             steps {
                 script {
-                    pushDocker("${buildTag}") // calls your shared library function
+                    // Push Docker image to the registry
+                    docker.withRegistry('https://index.docker.io/v1/', env.DOCKER_CREDENTIALS) {
+                        sh "docker push ${DOCKER_REGISTRY}/nginx-app:${buildTag}"
+                    }
                 }
             }
         }
 
-        stage('Deploy via Helm') {
-            when {
-                expression { params.DEPLOY }
-            }
+        stage('Deploy to AKS') {
+            when { expression { params.DEPLOY } }
             steps {
                 script {
-                    sh """
-                        helm upgrade --install ${HELM_RELEASE} ./charts/nginx-app \
-                            --namespace ${K8S_NAMESPACE} \
-                            --set image.repository=${DOCKER_REGISTRY}/nginx-app \
-                            --set image.tag=${buildTag} \
-                            --wait
-                    """
+                    // Deploy to AKS using Helm
+                    withCredentials([file(credentialsId: env.KUBE_CREDENTIALS, variable: 'KUBECONFIG')]) {
+                        sh """
+                        helm upgrade --install ${HELM_RELEASE} ./helm-chart --namespace ${K8S_NAMESPACE} --set image.tag=${buildTag} --set environment=${params.ENV}
+                        """
+                    }
                 }
             }
         }
