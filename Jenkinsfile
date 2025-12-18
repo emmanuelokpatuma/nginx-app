@@ -41,7 +41,7 @@ pipeline {
             steps {
                 script {
                     // Run SonarQube analysis
-                    withSonarQubeEnv(SONARQUBE_SERVER1) {
+                    withSonarQubeEnv(SONARQUBE_SERVER) {
                         sh 'mvn clean verify sonar:sonar'  // Adjust for your build tool, like Gradle or npm
                     }
                 }
