@@ -1,0 +1,64 @@
+@Library('mySharedLibrary') _
+
+def buildTag = ''
+
+pipeline {
+    agent { label 'build-agent' }
+
+    parameters {
+        string(name: 'BRANCH', defaultValue: 'master')
+        string(name: 'APP_VERSION', defaultValue: '1.0.0')
+        choice(name: 'ENV', choices: ['dev', 'staging', 'prod'])
+        booleanParam(name: 'DEPLOY', defaultValue: true)
+    }
+
+    environment {
+        HELM_RELEASE = 'nginx-app'
+        K8S_NAMESPACE = 'default'
+        DOCKER_REGISTRY = 'omagu'
+    }
+
+    stages {
+        stage('Generate Tag') {
+            steps {
+                script {
+                    buildTag = "${params.APP_VERSION}-${env.BUILD_NUMBER}"
+                    echo "Generated tag: ${buildTag}"
+                }
+            }
+        }
+
+        stage('Checkout Code') {
+            steps {
+                git url: 'https://github.com/gititc778/sampleApp.git', branch: "${params.BRANCH}"
+            }
+        }
+
+        stage('Build Docker Image') {
+            steps {
+                script {
+                    buildDocker(buildTag)
+                }
+            }
+        }
+
+        stage('Push Docker Image') {
+            steps {
+                script {
+                    pushDocker(buildTag)
+                }
+            }
+        }
+
+        stage('Deploy to AKS') {
+            when {
+                expression { params.DEPLOY }
+            }
+            steps {
+                script {
+                    deployK8s(buildTag, params.ENV)
+                }
+            }
+        }
+    }
+}
