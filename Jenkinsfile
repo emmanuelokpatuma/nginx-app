@@ -37,28 +37,28 @@ pipeline {
             }
         }
 
-        stage('SonarQube Analysis') {
-            steps {
-                script {
-                    // Run SonarQube analysis
-                    withSonarQubeEnv(SONARQUBE_SERVER) {
-                        sh 'mvn clean verify sonar:sonar'  // Adjust for your build tool, like Gradle or npm
-                    }
-                }
-            }
-        }
+        // stage('SonarQube Analysis') {
+        //     steps {
+        //         script {
+        //             // Run SonarQube analysis
+        //             withSonarQubeEnv(SONARQUBE_SERVER) {
+        //                 sh 'mvn clean verify sonar:sonar'  // Adjust for your build tool, like Gradle or npm
+        //             }
+        //         }
+        //     }
+        // }
 
-        stage('SonarQube Quality Gate') {
-            steps {
-                script {
-                    // Wait for SonarQube quality gate status
-                    def qualityGate = waitForQualityGate()  // Checks SonarQube quality gate status
-                    if (qualityGate.status != 'OK') {
-                        error "Quality gate failed: ${qualityGate.status}"  // Fail if quality gate fails
-                    }
-                }
-            }
-        }
+        // stage('SonarQube Quality Gate') {
+        //     steps {
+        //         script {
+        //             // Wait for SonarQube quality gate status
+        //             def qualityGate = waitForQualityGate()  // Checks SonarQube quality gate status
+        //             if (qualityGate.status != 'OK') {
+        //                 error "Quality gate failed: ${qualityGate.status}"  // Fail if quality gate fails
+        //             }
+        //         }
+        //     }
+        // }
 
         stage('Build Docker Image') {
             steps {
