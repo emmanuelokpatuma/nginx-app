@@ -16,7 +16,7 @@ pipeline {
         HELM_RELEASE = 'nginx-app'  // Name of your Helm release
         K8S_NAMESPACE = 'default'  // Kubernetes namespace
         DOCKER_REGISTRY = 'omagu'  // Docker registry name
-        DOCKER_CREDENTIALS = 'omagu'  // Jenkins credentials ID for Docker
+        DOCKER_CREDENTIALS = 'docker-cred-id'  // Jenkins credentials ID for Docker
         KUBE_CREDENTIALS = 'aks-kubeconfig'  // Jenkins credentials ID for Kubernetes config
         SONARQUBE_SERVER = 'SonarQubeServer1'  // Name of your SonarQube server configured in Jenkins
     }
