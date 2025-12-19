@@ -69,8 +69,7 @@ pipeline {
             steps {
                 script {
                     // Build Docker image and tag it
-                    docker.withRegistry('https://index.docker.io/v1/', env.DOCKER_CREDENTIALS) {
-                        sh "docker build -t ${DOCKER_REGISTRY}/nginx-app:${buildTag} ."
+                    sh "docker build -t omagu/nginx-app:${params.APP_VERSION} ."
                     }
                 }
             }
