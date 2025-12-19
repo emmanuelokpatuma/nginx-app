@@ -3,7 +3,7 @@
 def buildTag = ''  // Variable to store build tag
 
 pipeline {
-    agent { label 'build-agent' }
+    agent any
 
     parameters {
         string(name: 'BRANCH', defaultValue: 'master', description: 'Git branch to build')
