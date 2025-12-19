@@ -13,12 +13,10 @@ pipeline {
     }
 
     environment {
-        HELM_RELEASE = 'nginx-app'  // Name of your Helm release
-        K8S_NAMESPACE = "${params.ENV}"  // Kubernetes namespace
+        HELM_RELEASE = 'nginx-app'  // Helm release name
+        K8S_NAMESPACE = "${params.ENV}"   // Kubernetes namespace
         SONAR_PROJECT_KEY = 'sampleapp'
-        SONAR_HOST_URL = 'http://20.75.196.235:9000/'  // Name of your SonarQube server configured in Jenkins
-        DOCKER_REGISTRY = 'docker.io'  // Example Docker registry
-        DOCKER_CREDENTIALS = 'docker-credentials-id'  // Example credentials ID
+        SONAR_HOST_URL = 'http://20.75.196.235:9000/'  // Jenkins credentials ID for Docker
     }
 
     stages {
