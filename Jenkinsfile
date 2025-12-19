@@ -18,7 +18,7 @@ pipeline {
         DOCKER_REGISTRY = 'omagu'  // Docker registry name
         DOCKER_CREDENTIALS = 'docker-cred-id'  // Jenkins credentials ID for Docker
         KUBE_CREDENTIALS = 'aks-kubeconfig'  // Jenkins credentials ID for Kubernetes config
-        SONARQUBE_SERVER = 'SonarQubeServer1'  // Name of your SonarQube server configured in Jenkins
+        // SONARQUBE_SERVER = 'SonarQubeServer1'  // Name of your SonarQube server configured in Jenkins
     }
 
     stages {
