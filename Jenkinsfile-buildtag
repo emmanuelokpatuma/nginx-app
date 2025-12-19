@@ -1,7 +1,7 @@
 def buildTag = ''
 
 pipeline {
-    agent any
+    agent { label 'build-agent' }
 
     stages {
         stage('Generate Tag') {

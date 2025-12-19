@@ -1,7 +1,7 @@
 pipeline {
     agent {
         node {
-            label 'any'
+            agent { label 'build-agent' }
             customWorkspace '/home/ec2-user/jenkins'
         }
     }
