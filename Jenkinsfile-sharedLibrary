@@ -3,7 +3,7 @@
 def buildTag = ''
 
 pipeline {
-    agent { label 'build-agent' }
+    agent any
 
     parameters {
         string(name: 'BRANCH', defaultValue: 'master')
