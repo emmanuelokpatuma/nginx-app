@@ -17,6 +17,8 @@ pipeline {
         K8S_NAMESPACE = "${params.ENV}"  // Kubernetes namespace
         SONAR_PROJECT_KEY = 'sampleapp'
         SONAR_HOST_URL = 'http://20.75.196.235:9000/'  // Name of your SonarQube server configured in Jenkins
+        DOCKER_REGISTRY = 'docker.io'  // Example Docker registry
+        DOCKER_CREDENTIALS = 'docker-credentials-id'  // Example credentials ID
     }
 
     stages {
@@ -34,12 +36,13 @@ pipeline {
                 script {
                     def branchToBuild = params.BRANCH ?: 'master'
                     git branch: branchToBuild,
-                git url: 'https://github.com/emmanuelokpatuma/nginx-app.git', 
-                credentialsId: 'github-credentials' 
+                        url: 'https://github.com/emmanuelokpatuma/nginx-app.git', 
+                        credentialsId: 'github-credentials' 
+                }
             }
         }
 
-          stage('SonarQube Analysis') {
+        stage('SonarQube Analysis') {
             steps {
                 script {
                     def scannerHome = tool name: 'mysonarscanner', type: 'hudson.plugins.sonar.SonarRunnerInstallation'
@@ -56,12 +59,13 @@ pipeline {
             }
         }
 
-         stage('SonarQube Quality Gate') {
-             steps {
+        stage('SonarQube Quality Gate') {
+            steps {
                 timeout(time: 5, unit: 'MINUTES') {
                     waitForQualityGate abortPipeline: false
                 }
-         }
+            }
+        }
 
         stage('Build Docker Image') {
             steps {
@@ -90,22 +94,22 @@ pipeline {
         }
 
         stage('Azure Login & AKS Setup') {
-    steps {
-        withCredentials([usernamePassword(
-            credentialsId: 'aks-login', 
-            usernameVariable: 'AZURE_CLIENT_ID', 
-            passwordVariable: 'AZURE_CLIENT_SECRET'
-        )]) {
-            sh """
-                az login --service-principal -u "$AZURE_CLIENT_ID" -p "$AZURE_CLIENT_SECRET" --tenant 2b32b1fa-7899-482e-a6de-be99c0ff5516
-                az aks get-credentials --resource-group rg-dev-flux --name aks-dev-flux-cluster --overwrite-existing
-                kubectl get pods -n default
-            """
+            steps {
+                withCredentials([usernamePassword(
+                    credentialsId: 'aks-login', 
+                    usernameVariable: 'AZURE_CLIENT_ID', 
+                    passwordVariable: 'AZURE_CLIENT_SECRET'
+                )]) {
+                    sh """
+                        az login --service-principal -u "$AZURE_CLIENT_ID" -p "$AZURE_CLIENT_SECRET" --tenant 2b32b1fa-7899-482e-a6de-be99c0ff5516
+                        az aks get-credentials --resource-group rg-dev-flux --name aks-dev-flux-cluster --overwrite-existing
+                        kubectl get pods -n default
+                    """
+                }
+            }
         }
-    }
-}
 
-        stage  ('Create Helm Chart') {
+        stage('Create Helm Chart') {
             steps {
                 script {
                     if (!fileExists('helm-chart/Chart.yaml')) {
@@ -127,13 +131,10 @@ pipeline {
             }
         }
     }
-}
 
-        
     post {
         always {
             echo "Pipeline finished. Build tag: ${buildTag}"
         }
     }
-}
 }
