@@ -14,10 +14,10 @@ pipeline {
 
     environment {
         HELM_RELEASE = 'nginx-app'  // Helm release name
-        K8S_NAMESPACE = 'default'   // Kubernetes namespace
-        DOCKER_REGISTRY = 'omagu'  // Docker registry name
-        DOCKER_CREDENTIALS = 'docker-cred-id'  // Jenkins credentials ID for Docker
-        KUBE_CREDENTIALS = 'aks-kubeconfig'   // Jenkins credentials ID for Kubernetes config
+        K8S_NAMESPACE = "${params.ENV}"   // Kubernetes namespace
+        SONAR_PROJECT_KEY = 'sampleapp'
+        SONAR_HOST_URL = 'http://20.75.196.235:9000/'  // Jenkins credentials ID for Docker
+        
     }
 
     stages {
@@ -36,12 +36,11 @@ pipeline {
             }
         }
 
-        stage('Build Docker Image') {
+         stage('Build Docker Image') {
             steps {
                 script {
-                    // Build Docker image
-                    docker.withRegistry('https://index.docker.io/v1/', env.DOCKER_CREDENTIALS) {
-                        sh "docker build -t ${DOCKER_REGISTRY}/nginx-app:${buildTag} ."
+                    // Build Docker image and tag it
+                    sh "docker build -t omagu/nginx-app:${params.APP_VERSION} ."
                     }
                 }
             }
@@ -49,11 +48,15 @@ pipeline {
 
         stage('Push Docker Image') {
             steps {
-                script {
-                    // Push Docker image to the Docker registry
-                    docker.withRegistry('https://index.docker.io/v1/', env.DOCKER_CREDENTIALS) {
-                        sh "docker push ${DOCKER_REGISTRY}/nginx-app:${buildTag}"
-                    }
+                withCredentials([usernamePassword(
+                    credentialsId: 'omagu',
+                    usernameVariable: 'DOCKER_USER',
+                    passwordVariable: 'DOCKER_PASS'
+                )]) {
+                    sh """
+                        echo \$DOCKER_PASS | docker login -u \$DOCKER_USER --password-stdin
+                        docker push omagu/nginx-app:${params.APP_VERSION}
+                    """
                 }
             }
         }

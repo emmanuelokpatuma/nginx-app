@@ -6,19 +6,15 @@ pipeline {
     agent { label 'build-agent' }
 
     parameters {
-        string(name: 'BRANCH', defaultValue: 'master', description: 'Git branch to build')
-        string(name: 'APP_VERSION', defaultValue: '1.0.0', description: 'App version/tag')
+        string(name: 'APP_VERSION', defaultValue: 'v1', description: 'App version to build and deploy')
         choice(name: 'ENV', choices: ['dev', 'staging', 'prod'], description: 'Target environment')
-        booleanParam(name: 'DEPLOY', defaultValue: true, description: 'Deploy after build?')
     }
 
     environment {
-        HELM_RELEASE = 'nginx-app'  // Name of your Helm release
-        K8S_NAMESPACE = 'default'  // Kubernetes namespace
-        DOCKER_REGISTRY = 'omagu'  // Docker registry name
-        DOCKER_CREDENTIALS = 'docker-cred-id'  // Jenkins credentials ID for Docker
-        KUBE_CREDENTIALS = 'aks-kubeconfig'  // Jenkins credentials ID for Kubernetes config
-        // SONARQUBE_SERVER = 'SonarQubeServer1'  // Name of your SonarQube server configured in Jenkins
+        HELM_RELEASE = 'nginx-app'  // Helm release name
+        K8S_NAMESPACE = "${params.ENV}"   // Kubernetes namespace
+        SONAR_PROJECT_KEY = 'sampleapp'
+        SONAR_HOST_URL = 'http://20.75.196.235:9000/'  // Jenkins credentials ID for Docker
     }
 
     stages {
@@ -33,66 +29,99 @@ pipeline {
 
         stage('Checkout Code') {
             steps {
-                git url: 'https://github.com/emmanuelokpatuma/nginx-app.git', branch: "${params.BRANCH}"
+                script {
+                    def branchToBuild = params.BRANCH ?: 'master'
+                    git branch: branchToBuild,
+                        url: 'https://github.com/emmanuelokpatuma/nginx-app.git', 
+                        credentialsId: 'github-credentials' 
+                }
             }
         }
 
-        // stage('SonarQube Analysis') {
-        //     steps {
-        //         script {
-        //             // Run SonarQube analysis
-        //             withSonarQubeEnv(SONARQUBE_SERVER) {
-        //                 sh 'mvn clean verify sonar:sonar'  // Adjust for your build tool, like Gradle or npm
-        //             }
-        //         }
-        //     }
-        // }
+        stage('SonarQube Analysis') {
+            steps {
+                script {
+                    def scannerHome = tool name: 'mysonarscanner', type: 'hudson.plugins.sonar.SonarRunnerInstallation'
+                    withSonarQubeEnv('sonarkube-swathi') {
+                        sh """
+                            ${scannerHome}/bin/sonar-scanner \
+                                -Dsonar.projectKey=${SONAR_PROJECT_KEY} \
+                                -Dsonar.sources=. \
+                                -Dsonar.host.url=${SONAR_HOST_URL} \
+                                -Dsonar.login=$SONAR_AUTH_TOKEN
+                        """
+                    }
+                }
+            }
+        }
 
-        // stage('SonarQube Quality Gate') {
-        //     steps {
-        //         script {
-        //             // Wait for SonarQube quality gate status
-        //             def qualityGate = waitForQualityGate()  // Checks SonarQube quality gate status
-        //             if (qualityGate.status != 'OK') {
-        //                 error "Quality gate failed: ${qualityGate.status}"  // Fail if quality gate fails
-        //             }
-        //         }
-        //     }
-        // }
+        stage('SonarQube Quality Gate') {
+            steps {
+                timeout(time: 5, unit: 'MINUTES') {
+                    waitForQualityGate abortPipeline: false
+                }
+            }
+        }
 
         stage('Build Docker Image') {
             steps {
                 script {
                     // Build Docker image and tag it
-                    docker.withRegistry('https://index.docker.io/v1/', env.DOCKER_CREDENTIALS) {
-                        sh "docker build -t ${DOCKER_REGISTRY}/nginx-app:${buildTag} ."
-                    }
+                    sh "docker build -t omagu/nginx-app:${params.APP_VERSION} ."
                 }
             }
         }
 
         stage('Push Docker Image') {
             steps {
+                withCredentials([usernamePassword(
+                    credentialsId: 'omagu',
+                    usernameVariable: 'DOCKER_USER',
+                    passwordVariable: 'DOCKER_PASS'
+                )]) {
+                    sh """
+                        echo \$DOCKER_PASS | docker login -u \$DOCKER_USER --password-stdin
+                        docker push omagu/nginx-app:${params.APP_VERSION}
+                    """
+                }
+            }
+        }
+
+        stage('Azure Login & AKS Setup') {
+            steps {
+                withCredentials([usernamePassword(
+                    credentialsId: 'aks-login', 
+                    usernameVariable: 'AZURE_CLIENT_ID', 
+                    passwordVariable: 'AZURE_CLIENT_SECRET'
+                )]) {
+                    sh """
+                        az login --service-principal -u "$AZURE_CLIENT_ID" -p "$AZURE_CLIENT_SECRET" --tenant 2b32b1fa-7899-482e-a6de-be99c0ff5516
+                        az aks get-credentials --resource-group rg-dev-flux --name aks-dev-flux-cluster --overwrite-existing
+                        kubectl get pods -n default
+                    """
+                }
+            }
+        }
+
+        stage('Create Helm Chart') {
+            steps {
                 script {
-                    // Push Docker image to the registry
-                    docker.withRegistry('https://index.docker.io/v1/', env.DOCKER_CREDENTIALS) {
-                        sh "docker push ${DOCKER_REGISTRY}/nginx-app:${buildTag}"
+                    if (!fileExists('helm-chart/Chart.yaml')) {
+                        sh 'helm create helm-chart'
                     }
                 }
             }
         }
 
-        stage('Deploy to AKS') {
-            when { expression { params.DEPLOY } }
+        stage('Deploy with Helm') {
             steps {
-                script {
-                    // Deploy to AKS using Helm
-                    withCredentials([file(credentialsId: env.KUBE_CREDENTIALS, variable: 'KUBECONFIG')]) {
-                        sh """
-                        helm upgrade --install ${HELM_RELEASE} ./helm-chart --namespace ${K8S_NAMESPACE} --set image.tag=${buildTag} --set environment=${params.ENV}
-                        """
-                    }
-                }
+                sh """
+                    echo "Deploying Helm chart to AKS..."
+                    helm upgrade --install ${HELM_RELEASE} ./helm-chart \
+                        --namespace ${params.ENV} \
+                        --set image.tag=${params.APP_VERSION} \
+                        --create-namespace
+                """
             }
         }
     }
