@@ -6,10 +6,8 @@ pipeline {
     agent { label 'build-agent' }
 
     parameters {
-        string(name: 'BRANCH', defaultValue: 'master', description: 'Git branch to build')
-        string(name: 'APP_VERSION', defaultValue: '1.0.0', description: 'App version/tag')
+        string(name: 'APP_VERSION', defaultValue: 'v1', description: 'App version to build and deploy')
         choice(name: 'ENV', choices: ['dev', 'staging', 'prod'], description: 'Target environment')
-        booleanParam(name: 'DEPLOY', defaultValue: true, description: 'Deploy after build?')
     }
 
     environment {
@@ -70,7 +68,6 @@ pipeline {
                 script {
                     // Build Docker image and tag it
                     sh "docker build -t omagu/nginx-app:${params.APP_VERSION} ."
-                    }
                 }
             }
         }
@@ -135,4 +132,3 @@ pipeline {
         }
     }
 }
-
