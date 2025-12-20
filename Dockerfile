@@ -1,17 +1,15 @@
-FROM mcr.microsoft.com/dotnet/sdk:6.0
+# Use the official Nginx image
+FROM nginx:alpine
 
-WORKDIR /app
+# Copy your Nginx configuration file into the container (if you have one)
+COPY nginx.conf /etc/nginx/nginx.conf
 
-# Copy everything and build the app
-COPY . ./
+# Copy your static website or app files into the container (adjust the path)
+COPY . /usr/share/nginx/html
 
-RUN dotnet restore
-RUN dotnet publish -c Release -o /app/publish
+# Expose the port Nginx will be running on
+EXPOSE 80
 
-WORKDIR /app/publish
+# Start Nginx in the foreground (this is the default CMD in the nginx:alpine image)
+CMD ["nginx", "-g", "daemon off;"]
 
-EXPOSE 5000
-
-ENV ASPNETCORE_URLS=http://0.0.0.0:5000
-
-ENTRYPOINT ["dotnet", "sampleApp.dll"]
